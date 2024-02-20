@@ -1,17 +1,25 @@
-cd kestrel; dotnet run --launch-profile https # F#/kestrel
-cd redbean; ./redbean-2.2.com -D srv -p 7027 # lua/redbean
-cd go; go run . # go/net.http
-cd userver; git init; make build-release; build-release/userver -c static_config.yaml #c++/userver
+# Naive performant tests to get a line in the sand regarding implementation details and new world http perf
 
-# NOTES (order of preference)
-userver: uses http 1.1. Is very slow when enabling TLS but very fast when not (also note its using GMT by default not localtime - code could use improvement)
+System: https://gist.github.com/bjconlan/9ff7683d15d101f8f015827bb8244785
 
-kestral: Attempts to use more advanced http protocols but ab isn't compatable so fallsback to http 1.1
-
-go: By far the neatest codebase, using HTTP 1.1, surpisingly slower then kestral when performing TLS termination
-
-readbean: Only used HTTP 1.0, Lua is nice (only not compiled server here); still not sure how I feel about this ecosystem
-          (perhaps still the most disliked since the learning curve is there moresoe than golang but not a showstopper)
+userver: `make start-release` (note when using rusage, the release binary is used directly)
+  uses http 1.1. Is very slow when enabling TLS but very fast when not (also note its using GMT by default not
+  local timezone - code could use improvement). I really like this framework, dynamic config & tracing ootb and
+  with good defaults (arguably having yandex traceid keys isnt perfect, perhaps a pr can fix this though ;)
+kestrel: `dotnet run --launch-profile https`
+  Attempts to use more advanced http protocols but ab isn't compatable so falls back to http 1.1. Would love to
+  evolve these tests to include http3/quic performance. Suprisingly fast (the advertisments are true)
+go: `go run .` (note when using rusage this is being compiled and executed so probably not ideal)
+  By far the neatest implementation (in my opinion) thanks to 1.22 clean routing APIs etc, using HTTP 1.1
+  really good performance and memory usage which is probably why golang is becoming the defacto tool in this space.
+redbean: `./redbean-2.2.com -D srv -p 7027`
+  Lua is nice, im not sure how to squeese more performance out of this either (not that I've really tried yet,
+  although I want to give a raw c based 'greenbean' server a shot) This also doesn't have the best datetime
+  formatting (but at least was performing similar ops to others)
+  When not using ssl termination this much more competitive (but doesnt perform well under stress, i've reported
+  against a 100k requests over 1k concurrent connections and readbean has issues when this when not using tls
+  which is strange, at about 15k@1k requests it stops handling requests), when less than this is averaging 40ms!
+  And wow look at the memory usage of this thing! (need to look into if this is the issue with limited requests)
 
 sample responses:
 ```
@@ -34,7 +42,7 @@ sample responses:
 ```
 
 # SSH
-ab -l -n 100000 -c 1000 -E https.pem https://localhost:7027/weatherforecast
+naive benchmarking via `ab -l -n 100000 -c 1000 -E https.pem https://localhost:7027/weatherforecast`
 
 ## kestrel (Numerous ssl errors; probably due to ab not supporting http3)
 ...
@@ -56,40 +64,45 @@ Server Temp Key:        X25519 253 bits
 TLS Server Name:        localhost
 
 Document Path:          /weatherforecast
-Document Length:        0 bytes
+Document Length:        Variable
 
 Concurrency Level:      1000
-Time taken for tests:   44.461 seconds
+Time taken for tests:   43.192 seconds
 Complete requests:      100000
-Failed requests:        100000
-   (Connect: 0, Receive: 0, Length: 100000, Exceptions: 0)
-Total transferred:      71523947 bytes
-HTML transferred:       57623947 bytes
-Requests per second:    2249.17 [#/sec] (mean)
-Time per request:       444.608 [ms] (mean)
-Time per request:       0.445 [ms] (mean, across all concurrent requests)
-Transfer rate:          1570.99 [Kbytes/sec] received
+Failed requests:        0
+Total transferred:      71527155 bytes
+HTML transferred:       57627155 bytes
+Requests per second:    2315.23 [#/sec] (mean)
+Time per request:       431.923 [ms] (mean)
+Time per request:       0.432 [ms] (mean, across all concurrent requests)
+Transfer rate:          1617.20 [Kbytes/sec] received
 
 Connection Times (ms)
               min  mean[+/-sd] median   max
-Connect:        2  276  38.2    275     397
-Processing:    49  168  37.4    168     286
-Waiting:        0   98  49.0     95     226
-Total:         51  444  18.3    440     513
+Connect:       14  268  38.0    267     403
+Processing:    39  162  38.6    162     292
+Waiting:        1   93  48.1     90     255
+Total:        127  431  20.2    426     528
 
 Percentage of the requests served within a certain time (ms)
-  50%    440
-  66%    447
-  75%    453
-  80%    459
-  90%    469
-  95%    480
-  98%    493
-  99%    502
- 100%    513 (longest request)
+  50%    426
+  66%    433
+  75%    439
+  80%    442
+  90%    450
+  95%    470
+  98%    498
+  99%    507
+ 100%    528 (longest request)
 
-# redbean
-...
+### rusage
+RL: ballooned to 633,376kb in size
+RL: needed 201,928,100µs cpu (29% kernel)
+RL: caused 189,122 page faults (100% memcpy)
+RL: 1,403,892 context switches (96% consensual)
+RL: performed 0 reads and 240 write i/o operations
+
+## redbean
 Server Software:        redbean/2.2.0
 Server Hostname:        localhost
 Server Port:            7027
@@ -98,40 +111,44 @@ Server Temp Key:        ECDH P-256 256 bits
 TLS Server Name:        localhost
 
 Document Path:          /weatherforecast
-Document Length:        552 bytes
+Document Length:        Variable
 
 Concurrency Level:      1000
-Time taken for tests:   53.461 seconds
+Time taken for tests:   53.677 seconds
 Complete requests:      100000
-Failed requests:        9965
-   (Connect: 0, Receive: 0, Length: 9965, Exceptions: 0)
-Total transferred:      71746455 bytes
-HTML transferred:       55146455 bytes
-Requests per second:    1870.54 [#/sec] (mean)
-Time per request:       534.606 [ms] (mean)
-Time per request:       0.535 [ms] (mean, across all concurrent requests)
-Transfer rate:          1310.59 [Kbytes/sec] received
+Failed requests:        0
+Total transferred:      71850284 bytes
+HTML transferred:       55250284 bytes
+Requests per second:    1862.98 [#/sec] (mean)
+Time per request:       536.773 [ms] (mean)
+Time per request:       0.537 [ms] (mean, across all concurrent requests)
+Transfer rate:          1307.19 [Kbytes/sec] received
 
 Connection Times (ms)
               min  mean[+/-sd] median   max
-Connect:        2  308 139.2    326    2417
-Processing:    17  222  64.5    190     386
-Waiting:        0   59  53.6     37     205
-Total:         70  530 129.6    520    2587
+Connect:        2  296 132.6    284    2351
+Processing:    21  239  35.4    236     328
+Waiting:        0   72  29.4     59     167
+Total:         74  534 137.7    523    2593
 
 Percentage of the requests served within a certain time (ms)
-  50%    520
-  66%    525
-  75%    529
-  80%    532
-  90%    539
-  95%    545
-  98%    558
-  99%   1530
- 100%   2587 (longest request)
+  50%    523
+  66%    530
+  75%    535
+  80%    538
+  90%    547
+  95%    559
+  98%    582
+  99%   1521
+ 100%   2593 (longest request)
 
-# go
-...
+### rusage
+RL: ballooned to 2,688kb in size
+RL: needed 106,731,644µs cpu (27% kernel)
+RL: caused 7,157,442 page faults (100% memcpy)
+RL: 485,889 context switches (98% consensual)
+
+## go
 Server Software:
 Server Hostname:        localhost
 Server Port:            7027
@@ -140,39 +157,45 @@ Server Temp Key:        X25519 253 bits
 TLS Server Name:        localhost
 
 Document Path:          /weatherforecast
-Document Length:        589 bytes
+Document Length:        Variable
 
 Concurrency Level:      1000
-Time taken for tests:   41.583 seconds
+Time taken for tests:   40.980 seconds
 Complete requests:      100000
-Failed requests:        93862
-   (Connect: 0, Receive: 0, Length: 93862, Exceptions: 0)
-Total transferred:      69521659 bytes
-HTML transferred:       58621659 bytes
-Requests per second:    2404.83 [#/sec] (mean)
-Time per request:       415.830 [ms] (mean)
-Time per request:       0.416 [ms] (mean, across all concurrent requests)
-Transfer rate:          1632.69 [Kbytes/sec] received
+Failed requests:        0
+Total transferred:      69524098 bytes
+HTML transferred:       58624098 bytes
+Requests per second:    2440.24 [#/sec] (mean)
+Time per request:       409.796 [ms] (mean)
+Time per request:       0.410 [ms] (mean, across all concurrent requests)
+Transfer rate:          1656.79 [Kbytes/sec] received
 
 Connection Times (ms)
               min  mean[+/-sd] median   max
-Connect:        2  256  38.6    251     401
-Processing:    48  159  39.7    158     382
-Waiting:        6  100  41.7     97     333
-Total:         90  415  31.4    407     672
+Connect:        2  250  38.0    246     390
+Processing:    63  157  38.9    157     379
+Waiting:        6   98  40.6     95     328
+Total:         89  408  31.2    400     664
 
 Percentage of the requests served within a certain time (ms)
-  50%    407
-  66%    413
-  75%    418
-  80%    423
-  90%    442
-  95%    478
-  98%    534
-  99%    546
- 100%    672 (longest request)
+  50%    400
+  66%    406
+  75%    411
+  80%    415
+  90%    437
+  95%    489
+  98%    516
+  99%    525
+ 100%    664 (longest request)
 
-# userver (4 main/2 fs)
+### rusage
+RL: ballooned to 155,392kb in size
+RL: needed 196,261,046µs cpu (4% kernel)
+RL: caused 663,294 page faults (99% memcpy)
+RL: 999,197 context switches (98% consensual)
+RL: performed 70,760 reads and 37,920 write i/o operations
+
+## userver
 Server Software:        userver/1.0.0
 Server Hostname:        localhost
 Server Port:            7027
@@ -184,37 +207,134 @@ Document Path:          /weatherforecast
 Document Length:        Variable
 
 Concurrency Level:      1000
-Time taken for tests:   224.663 seconds
+Time taken for tests:   221.551 seconds
 Complete requests:      100000
 Failed requests:        0
-Total transferred:      92041260 bytes
-HTML transferred:       58141260 bytes
-Requests per second:    445.11 [#/sec] (mean)
-Time per request:       2246.631 [ms] (mean)
-Time per request:       2.247 [ms] (mean, across all concurrent requests)
-Transfer rate:          400.08 [Kbytes/sec] received
+Total transferred:      92041355 bytes
+HTML transferred:       58141355 bytes
+Requests per second:    451.36 [#/sec] (mean)
+Time per request:       2215.506 [ms] (mean)
+Time per request:       2.216 [ms] (mean, across all concurrent requests)
+Transfer rate:          405.70 [Kbytes/sec] received
 
 Connection Times (ms)
               min  mean[+/-sd] median   max
-Connect:       11  802 382.9    754    2166
-Processing:     6 1438 505.9   1439    4005
-Waiting:        0 1435 506.1   1436    4005
-Total:        134 2239 575.4   2192    4793
+Connect:       10  801 400.5    772    2292
+Processing:     6 1410 516.3   1422    4375
+Waiting:        0 1407 516.5   1420    4373
+Total:        135 2210 575.5   2176    5574
 
 Percentage of the requests served within a certain time (ms)
-  50%   2192
-  66%   2441
-  75%   2593
-  80%   2698
-  90%   2979
-  95%   3239
-  98%   3513
-  99%   3730
- 100%   4793 (longest request)
+  50%   2176
+  66%   2389
+  75%   2561
+  80%   2674
+  90%   2965
+  95%   3213
+  98%   3501
+  99%   3681
+ 100%   5574 (longest request)
 
-# NON SSH (ab -l -n 100000 -c 1000 http://localhost:7027/weatherforecast)
+### rusage
+RL: ballooned to 898,608kb in size
+RL: needed 878,878,665µs cpu (2% kernel)
+RL: caused 549,542 page faults (100% memcpy)
+RL: 212,331 context switches (98% consensual)
 
-# userver (4 main/2 fs)
+# NON SSH
+naive benchmarking via `ab -l -n 100000 -c 1000 http://localhost:7027/weatherforecast`
+
+## kestrel
+Server Software:        Kestrel
+Server Hostname:        localhost
+Server Port:            5101
+
+Document Path:          /weatherforecast
+Document Length:        Variable
+
+Concurrency Level:      1000
+Time taken for tests:   7.288 seconds
+Complete requests:      100000
+Failed requests:        0
+Total transferred:      71520138 bytes
+HTML transferred:       57620138 bytes
+Requests per second:    13721.64 [#/sec] (mean)
+Time per request:       72.878 [ms] (mean)
+Time per request:       0.073 [ms] (mean, across all concurrent requests)
+Transfer rate:          9583.73 [Kbytes/sec] received
+
+Connection Times (ms)
+              min  mean[+/-sd] median   max
+Connect:        0   36  50.2     34    1089
+Processing:     5   37   9.0     37      74
+Waiting:        2   22   8.7     20      64
+Total:         28   73  50.3     71    1142
+
+Percentage of the requests served within a certain time (ms)
+  50%     71
+  66%     73
+  75%     75
+  80%     76
+  90%     78
+  95%     80
+  98%     82
+  99%     84
+ 100%   1142 (longest request)
+
+### rusage
+RL: ballooned to 442,080kb in size
+RL: needed 42,658,508µs cpu (43% kernel)
+RL: caused 134,479 page faults (100% memcpy)
+RL: 588,522 context switches (73% consensual)
+RL: performed 0 reads and 240 write i/o operations
+
+## redbean (had strange issues so omitting)
+
+## go
+Server Software:
+Server Hostname:        localhost
+Server Port:            7027
+
+Document Path:          /weatherforecast
+Document Length:        Variable
+
+Concurrency Level:      1000
+Time taken for tests:   6.375 seconds
+Complete requests:      100000
+Failed requests:        0
+Total transferred:      69524760 bytes
+HTML transferred:       58624760 bytes
+Requests per second:    15686.83 [#/sec] (mean)
+Time per request:       63.748 [ms] (mean)
+Time per request:       0.064 [ms] (mean, across all concurrent requests)
+Transfer rate:          10650.62 [Kbytes/sec] received
+
+Connection Times (ms)
+              min  mean[+/-sd] median   max
+Connect:        0   31   5.5     31      46
+Processing:     9   32   5.7     32      60
+Waiting:        0   23   5.7     21      45
+Total:         33   63   2.2     63      73
+
+Percentage of the requests served within a certain time (ms)
+  50%     63
+  66%     64
+  75%     65
+  80%     65
+  90%     66
+  95%     67
+  98%     67
+  99%     68
+ 100%     73 (longest request)
+
+### rusage
+RL: ballooned to 96,640kb in size
+RL: needed 9,581,460µs cpu (57% kernel)
+RL: caused 42,249 page faults (99% memcpy)
+RL: 552,518 context switches (99% consensual)
+RL: performed 0 reads and 336 write i/o operations
+
+## userver
 Server Software:        userver/1.0.0
 Server Hostname:        localhost
 Server Port:            7027
@@ -223,30 +343,36 @@ Document Path:          /weatherforecast
 Document Length:        Variable
 
 Concurrency Level:      1000
-Time taken for tests:   6.274 seconds
+Time taken for tests:   6.323 seconds
 Complete requests:      100000
 Failed requests:        0
-Total transferred:      92042985 bytes
-HTML transferred:       58142985 bytes
-Requests per second:    15938.99 [#/sec] (mean)
-Time per request:       62.739 [ms] (mean)
+Total transferred:      92043841 bytes
+HTML transferred:       58143841 bytes
+Requests per second:    15816.42 [#/sec] (mean)
+Time per request:       63.225 [ms] (mean)
 Time per request:       0.063 [ms] (mean, across all concurrent requests)
-Transfer rate:          14326.88 [Kbytes/sec] received
+Transfer rate:          14216.84 [Kbytes/sec] received
 
 Connection Times (ms)
               min  mean[+/-sd] median   max
-Connect:        0   30  10.3     30      54
-Processing:    13   32  10.4     32      56
-Waiting:        0   15  12.4     10      51
-Total:         29   62   3.1     62      72
+Connect:        0   31   8.5     31      56
+Processing:     9   32   8.6     32      59
+Waiting:        0   21   8.9     16      38
+Total:         31   63   3.7     62      78
 
 Percentage of the requests served within a certain time (ms)
   50%     62
   66%     63
-  75%     64
+  75%     65
   80%     65
-  90%     66
-  95%     67
-  98%     68
-  99%     69
- 100%     72 (longest request)
+  90%     68
+  95%     69
+  98%     73
+  99%     75
+ 100%     78 (longest request)
+
+### rusage
+RL: ballooned to 137,236kb in size
+RL: needed 12,024,268µs cpu (47% kernel)
+RL: caused 78,977 page faults (100% memcpy)
+RL: 815,280 context switches (99% consensual)

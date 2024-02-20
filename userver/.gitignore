@@ -1,2 +1,2 @@
-build_[debug|release]
+build_*
 *.local
