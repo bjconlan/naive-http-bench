@@ -1,4 +1,4 @@
-# Naive performant tests to get a line in the sand regarding implementation details and new world http perf
+# Naive performance tests for new world http implementations
 
 System: https://gist.github.com/bjconlan/9ff7683d15d101f8f015827bb8244785
 
