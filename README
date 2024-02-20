@@ -1,0 +1,252 @@
+cd kestrel; dotnet run --launch-profile https # F#/kestrel
+cd redbean; ./redbean-2.2.com -D srv -p 7027 # lua/redbean
+cd go; go run . # go/net.http
+cd userver; git init; make build-release; build-release/userver -c static_config.yaml #c++/userver
+
+# NOTES (order of preference)
+userver: uses http 1.1. Is very slow when enabling TLS but very fast when not (also note its using GMT by default not localtime - code could use improvement)
+
+kestral: Attempts to use more advanced http protocols but ab isn't compatable so fallsback to http 1.1
+
+go: By far the neatest codebase, using HTTP 1.1, surpisingly slower then kestral when performing TLS termination
+
+readbean: Only used HTTP 1.0, Lua is nice (only not compiled server here); still not sure how I feel about this ecosystem
+          (perhaps still the most disliked since the learning curve is there moresoe than golang but not a showstopper)
+
+sample responses:
+```
+[
+ {"date":"2024-02-06T16:41:28.6222126+10:00","temperatureC":16,"summary":"Scorching","temperatureF":60.79769618430525},
+ {"date":"2024-02-07T16:41:28.6222147+10:00","temperatureC":11,"summary":"Bracing","temperatureF":51.79841612670987},
+ {"date":"2024-02-08T16:41:28.6222149+10:00","temperatureC":-14,"summary":"Bracing","temperatureF":6.802015838732899},
+ {"date":"2024-02-09T16:41:28.6222182+10:00","temperatureC":39,"summary":"Warm","temperatureF":102.19438444924407},
+ {"date":"2024-02-10T16:41:28.6222186+10:00","temperatureC":2,"summary":"Scorching","temperatureF":35.59971202303816}
+]
+```
+```
+[
+ {"date":"2024-02-06T16:41:29.8949227+10:00","temperatureC":12,"summary":"Mild","temperatureF":53.59827213822894},
+ {"date":"2024-02-07T16:41:29.8949252+10:00","temperatureC":-20,"summary":"Freezing","temperatureF":-3.9971202303815687},
+ {"date":"2024-02-08T16:41:29.8949254+10:00","temperatureC":-17,"summary":"Cool","temperatureF":1.4024478041756652},
+ {"date":"2024-02-09T16:41:29.8949268+10:00","temperatureC":48,"summary":"Hot","temperatureF":118.39308855291577},
+ {"date":"2024-02-10T16:41:29.8949272+10:00","temperatureC":47,"summary":"Scorching","temperatureF":116.59323254139669}
+]
+```
+
+# SSH
+ab -l -n 100000 -c 1000 -E https.pem https://localhost:7027/weatherforecast
+
+## kestrel (Numerous ssl errors; probably due to ab not supporting http3)
+...
+SSL read failed (1) - closing connection
+80778EB3D67F0000:error:0A000197:SSL routines:SSL_shutdown:shutdown while in init:ssl/ssl_lib.c:2260:
+80778EB3D67F0000:error:0A000126:SSL routines:ssl3_read_n:unexpected eof while reading:ssl/record/rec_layer_s3.c:303:
+SSL read failed (1) - closing connection
+80778EB3D67F0000:error:0A000197:SSL routines:SSL_shutdown:shutdown while in init:ssl/ssl_lib.c:2260:
+80778EB3D67F0000:error:0A000126:SSL routines:ssl3_read_n:unexpected eof while reading:ssl/record/rec_layer_s3.c:303:
+Completed 100000 requests
+Finished 100000 requests
+
+
+Server Software:        Kestrel
+Server Hostname:        localhost
+Server Port:            7027
+SSL/TLS Protocol:       TLSv1.3,TLS_AES_256_GCM_SHA384,2048,256
+Server Temp Key:        X25519 253 bits
+TLS Server Name:        localhost
+
+Document Path:          /weatherforecast
+Document Length:        0 bytes
+
+Concurrency Level:      1000
+Time taken for tests:   44.461 seconds
+Complete requests:      100000
+Failed requests:        100000
+   (Connect: 0, Receive: 0, Length: 100000, Exceptions: 0)
+Total transferred:      71523947 bytes
+HTML transferred:       57623947 bytes
+Requests per second:    2249.17 [#/sec] (mean)
+Time per request:       444.608 [ms] (mean)
+Time per request:       0.445 [ms] (mean, across all concurrent requests)
+Transfer rate:          1570.99 [Kbytes/sec] received
+
+Connection Times (ms)
+              min  mean[+/-sd] median   max
+Connect:        2  276  38.2    275     397
+Processing:    49  168  37.4    168     286
+Waiting:        0   98  49.0     95     226
+Total:         51  444  18.3    440     513
+
+Percentage of the requests served within a certain time (ms)
+  50%    440
+  66%    447
+  75%    453
+  80%    459
+  90%    469
+  95%    480
+  98%    493
+  99%    502
+ 100%    513 (longest request)
+
+# redbean
+...
+Server Software:        redbean/2.2.0
+Server Hostname:        localhost
+Server Port:            7027
+SSL/TLS Protocol:       TLSv1.2,ECDHE-ECDSA-AES256-GCM-SHA384,256,256
+Server Temp Key:        ECDH P-256 256 bits
+TLS Server Name:        localhost
+
+Document Path:          /weatherforecast
+Document Length:        552 bytes
+
+Concurrency Level:      1000
+Time taken for tests:   53.461 seconds
+Complete requests:      100000
+Failed requests:        9965
+   (Connect: 0, Receive: 0, Length: 9965, Exceptions: 0)
+Total transferred:      71746455 bytes
+HTML transferred:       55146455 bytes
+Requests per second:    1870.54 [#/sec] (mean)
+Time per request:       534.606 [ms] (mean)
+Time per request:       0.535 [ms] (mean, across all concurrent requests)
+Transfer rate:          1310.59 [Kbytes/sec] received
+
+Connection Times (ms)
+              min  mean[+/-sd] median   max
+Connect:        2  308 139.2    326    2417
+Processing:    17  222  64.5    190     386
+Waiting:        0   59  53.6     37     205
+Total:         70  530 129.6    520    2587
+
+Percentage of the requests served within a certain time (ms)
+  50%    520
+  66%    525
+  75%    529
+  80%    532
+  90%    539
+  95%    545
+  98%    558
+  99%   1530
+ 100%   2587 (longest request)
+
+# go
+...
+Server Software:
+Server Hostname:        localhost
+Server Port:            7027
+SSL/TLS Protocol:       TLSv1.3,TLS_AES_128_GCM_SHA256,2048,128
+Server Temp Key:        X25519 253 bits
+TLS Server Name:        localhost
+
+Document Path:          /weatherforecast
+Document Length:        589 bytes
+
+Concurrency Level:      1000
+Time taken for tests:   41.583 seconds
+Complete requests:      100000
+Failed requests:        93862
+   (Connect: 0, Receive: 0, Length: 93862, Exceptions: 0)
+Total transferred:      69521659 bytes
+HTML transferred:       58621659 bytes
+Requests per second:    2404.83 [#/sec] (mean)
+Time per request:       415.830 [ms] (mean)
+Time per request:       0.416 [ms] (mean, across all concurrent requests)
+Transfer rate:          1632.69 [Kbytes/sec] received
+
+Connection Times (ms)
+              min  mean[+/-sd] median   max
+Connect:        2  256  38.6    251     401
+Processing:    48  159  39.7    158     382
+Waiting:        6  100  41.7     97     333
+Total:         90  415  31.4    407     672
+
+Percentage of the requests served within a certain time (ms)
+  50%    407
+  66%    413
+  75%    418
+  80%    423
+  90%    442
+  95%    478
+  98%    534
+  99%    546
+ 100%    672 (longest request)
+
+# userver (4 main/2 fs)
+Server Software:        userver/1.0.0
+Server Hostname:        localhost
+Server Port:            7027
+SSL/TLS Protocol:       TLSv1.3,TLS_AES_256_GCM_SHA384,2048,256
+Server Temp Key:        X25519 253 bits
+TLS Server Name:        localhost
+
+Document Path:          /weatherforecast
+Document Length:        Variable
+
+Concurrency Level:      1000
+Time taken for tests:   224.663 seconds
+Complete requests:      100000
+Failed requests:        0
+Total transferred:      92041260 bytes
+HTML transferred:       58141260 bytes
+Requests per second:    445.11 [#/sec] (mean)
+Time per request:       2246.631 [ms] (mean)
+Time per request:       2.247 [ms] (mean, across all concurrent requests)
+Transfer rate:          400.08 [Kbytes/sec] received
+
+Connection Times (ms)
+              min  mean[+/-sd] median   max
+Connect:       11  802 382.9    754    2166
+Processing:     6 1438 505.9   1439    4005
+Waiting:        0 1435 506.1   1436    4005
+Total:        134 2239 575.4   2192    4793
+
+Percentage of the requests served within a certain time (ms)
+  50%   2192
+  66%   2441
+  75%   2593
+  80%   2698
+  90%   2979
+  95%   3239
+  98%   3513
+  99%   3730
+ 100%   4793 (longest request)
+
+# NON SSH (ab -l -n 100000 -c 1000 http://localhost:7027/weatherforecast)
+
+# userver (4 main/2 fs)
+Server Software:        userver/1.0.0
+Server Hostname:        localhost
+Server Port:            7027
+
+Document Path:          /weatherforecast
+Document Length:        Variable
+
+Concurrency Level:      1000
+Time taken for tests:   6.274 seconds
+Complete requests:      100000
+Failed requests:        0
+Total transferred:      92042985 bytes
+HTML transferred:       58142985 bytes
+Requests per second:    15938.99 [#/sec] (mean)
+Time per request:       62.739 [ms] (mean)
+Time per request:       0.063 [ms] (mean, across all concurrent requests)
+Transfer rate:          14326.88 [Kbytes/sec] received
+
+Connection Times (ms)
+              min  mean[+/-sd] median   max
+Connect:        0   30  10.3     30      54
+Processing:    13   32  10.4     32      56
+Waiting:        0   15  12.4     10      51
+Total:         29   62   3.1     62      72
+
+Percentage of the requests served within a certain time (ms)
+  50%     62
+  66%     63
+  75%     64
+  80%     65
+  90%     66
+  95%     67
+  98%     68
+  99%     69
+ 100%     72 (longest request)
