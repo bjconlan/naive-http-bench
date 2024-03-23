@@ -12,7 +12,7 @@ kestrel: `dotnet run --launch-profile https`
 go: `go run .` (note when using rusage this is being compiled and executed so probably not ideal)
   By far the neatest implementation (in my opinion) thanks to 1.22 clean routing APIs etc, using HTTP 1.1
   really good performance and memory usage which is probably why golang is becoming the defacto tool in this space.
-redbean: `./redbean-2.2.com -D srv -p 7027`
+redbean: `./redbean-2.2.com -s -D srv -p 7027`
   Lua is nice, im not sure how to squeese more performance out of this either (not that I've really tried yet,
   although I want to give a raw c based 'greenbean' server a shot) This also doesn't have the best datetime
   formatting (but at least was performing similar ops to others)
@@ -20,6 +20,13 @@ redbean: `./redbean-2.2.com -D srv -p 7027`
   against a 100k requests over 1k concurrent connections and readbean has issues when this when not using tls
   which is strange, at about 15k@1k requests it stops handling requests), when less than this is averaging 40ms!
   And wow look at the memory usage of this thing! (need to look into if this is the issue with limited requests)
+toit: `toit.run http.toit`
+  I think the implementation details of the toit code are perhaps the most elegant. Its by far the simplest to
+  read or understand and was developed faster than other implementations to which I was only slightly familiar.
+  unfortinatly it looks like its also the slowest (wrk approximates 3k rps (1.7mb) transferred (vs go's 123k
+  rps (82mb)))
+  NOTE no benchmarks here yet; looks like ab doesn't like keep alive (and the toit http server doesn't force a
+       connection close when sending `-H "Connection: close"` header when performing ab)
 
 sample responses:
 ```
