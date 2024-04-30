@@ -29,18 +29,18 @@ public class RestServiceApplication {
 			HOT("Hot"),
 			SWELTERING("Sweltering"),
 			SCORCHING("Scorching");
-		
+
 			private final String description;
-			
+
 			private Type(String description) {
 				this.description = description;
 			}
-			
+
 			public String toString() {
 				return description;
 			}
 		};
-		
+
 		public float getTemperatureF() {
 			return 32.0f + this.temperatureC / 0.5556f;
 		}
@@ -49,7 +49,7 @@ public class RestServiceApplication {
 	@RestController
 	public class WeatherForecastController {
 
-		@GetMapping("/")
+		@GetMapping("/weatherforecast")
 		public List<WeatherForecast> getWeatherForcast() {
 			final var weatherForecasts = new ArrayList<WeatherForecast>(5);
 			for (int i = 0; i < 5; i++) {

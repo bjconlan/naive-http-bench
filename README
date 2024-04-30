@@ -28,14 +28,16 @@ toit: `toit.run http.toit`
   NOTE no benchmarks here yet; looks like ab doesn't like keep alive (and the toit http server doesn't force a
        connection close when sending `-H "Connection: close"` header when performing ab)
 spring: `./gradlew bootRun`
-  This is using the default tomcat based http server currently (as this is the default used by spring). Would prefer
-  to use netty for this performance test at some point as this has been the best performing web server for java for
-  some time now (but is only included as part of the 'reactive' spring/webflux platform set of deps.
+  This is using the default tomcat based http server currently (as this is the default used by spring). Would
+  prefer to use netty for this performance test at some point as this has been the best performing web server for
+  java for some time now (but is only included as part of the 'reactive' spring/webflux platform set of deps.
 greenbean `x86_64-unknown-cosmo-cc server.c -o server && ./server'
   Im hoping this is the fastest as its doing the simplest serialisation of json possible and no formatted logging.
   Currently this isn't implemented correctly (ie dates not rolling, nor are the present float formats inline with
-  others (my c-fu is not the best but this has been a nice refresher). Would also be nice to see whats going on here
-  with regards to a redbean comparison as redbean (as im not seeing redbean perform as expected).
+  others (my c-fu is not the best but this has been a nice refresher). (NO TLS and doesn't like ab... but wrk puts
+  this at Requests/sec: 188566, Transfer/sec: 143.34MB vs spring's Requests/sec: 125976, Transfer/sec: 79.29MB or
+  go's amazing Requests/sec: 308733,Transfer/sec: 204.70MB)
+
 sample responses:
 ```
 [
@@ -256,7 +258,7 @@ RL: needed 878,878,665µs cpu (2% kernel)
 RL: caused 549,542 page faults (100% memcpy)
 RL: 212,331 context switches (98% consensual)
 
-# NON SSH
+# NON TLS
 naive benchmarking via `ab -l -n 100000 -c 1000 http://localhost:7027/weatherforecast`
 
 ## kestrel
@@ -391,3 +393,46 @@ RL: ballooned to 137,236kb in size
 RL: needed 12,024,268µs cpu (47% kernel)
 RL: caused 78,977 page faults (100% memcpy)
 RL: 815,280 context switches (99% consensual)
+
+## spring (tomcat http server)
+Server Software:
+Server Hostname:        localhost
+Server Port:            8080
+
+Document Path:          /weatherforecast
+Document Length:        Variable
+
+Concurrency Level:      1000
+Time taken for tests:   7.199 seconds
+Complete requests:      100000
+Failed requests:        0
+Total transferred:      63876813 bytes
+HTML transferred:       53376813 bytes
+Requests per second:    13890.46 [#/sec] (mean)
+Time per request:       71.992 [ms] (mean)
+Time per request:       0.072 [ms] (mean, across all concurrent requests)
+Transfer rate:          8664.83 [Kbytes/sec] received
+
+Connection Times (ms)
+              min  mean[+/-sd] median   max
+Connect:        0   40 108.5     31    1090
+Processing:     1   31  20.0     32     268
+Waiting:        1   23  18.8     23     253
+Total:          3   71 122.4     66    1289
+
+Percentage of the requests served within a certain time (ms)
+  50%     66
+  66%     67
+  75%     68
+  80%     68
+  90%     70
+  95%     71
+  98%     73
+  99%   1056
+ 100%   1289 (longest request)
+
+### rusage
+RL: ballooned to 370,504kb in size
+RL: needed 27,466,171µs cpu (19% kernel)
+RL: caused 124,810 page faults (100% memcpy)
+RL: 403,385 context switches (98% consensual)
