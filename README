@@ -27,7 +27,15 @@ toit: `toit.run http.toit`
   rps (82mb)))
   NOTE no benchmarks here yet; looks like ab doesn't like keep alive (and the toit http server doesn't force a
        connection close when sending `-H "Connection: close"` header when performing ab)
-
+spring: `./gradlew bootRun`
+  This is using the default tomcat based http server currently (as this is the default used by spring). Would prefer
+  to use netty for this performance test at some point as this has been the best performing web server for java for
+  some time now (but is only included as part of the 'reactive' spring/webflux platform set of deps.
+greenbean `x86_64-unknown-cosmo-cc server.c -o server && ./server'
+  Im hoping this is the fastest as its doing the simplest serialisation of json possible and no formatted logging.
+  Currently this isn't implemented correctly (ie dates not rolling, nor are the present float formats inline with
+  others (my c-fu is not the best but this has been a nice refresher). Would also be nice to see whats going on here
+  with regards to a redbean comparison as redbean (as im not seeing redbean perform as expected).
 sample responses:
 ```
 [
